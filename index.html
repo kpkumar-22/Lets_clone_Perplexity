@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modex.ai - Ask Anything</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+    <div class="container" id="main-container">
+        <!-- Logo -->
+        <header class="header">
+            <h1 class="logo">modex<span class="accent">.ai</span></h1>
+        </header>
+
+        <!-- Search Section -->
+        <main class="search-section">
+            <div class="search-container">
+                <div class="search-input-wrapper">
+                    <input type="text" placeholder="Ask anything..." id="search-input">
+                </div>
+                
+                <div class="search-actions">
+                    <div class="left-actions">
+                        <input type="file" id="file-input" style="display: none;" accept=".pdf">
+                        <button class="icon-btn" id="upload-btn" aria-label="Upload PDF">
+                            <i data-lucide="paperclip"></i>
+                        </button>
+                        <button class="pill-btn highlight">
+                            <i data-lucide="monitor"></i>
+                            <span>Computer</span>
+                            <i data-lucide="plus" class="small-icon"></i>
+                        </button>
+                        <div id="file-status" class="file-badge" style="display: none;">
+                            <i data-lucide="file-text"></i>
+                            <span id="file-name"></span>
+                            <button id="remove-file" class="remove-btn">&times;</button>
+                        </div>
+                    </div>
+                    
+                    <div class="right-actions">
+                        <button class="text-btn">
+                            Model <i data-lucide="chevron-down"></i>
+                        </button>
+                        <button class="icon-btn">
+                            <i data-lucide="mic"></i>
+                        </button>
+                        <button class="voice-btn" id="search-submit">
+                            <div class="wave">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Results Card (Hidden by default) -->
+        <section class="results-card" id="results-card" style="display: none;">
+            <div class="results-header">
+                <div class="header-content">
+                    <i data-lucide="sparkles" class="header-icon"></i>
+                    <span>Modex AI Response</span>
+                </div>
+            </div>
+            <div class="results-body" id="results-content">
+                <!-- AI Response will be injected here -->
+            </div>
+        </section>
+
+        <!-- Secondary Card -->
+        <section class="secondary-card" id="secondary-card">
+            <header class="card-header">
+                <div class="header-content">
+                    <i data-lucide="monitor" class="header-icon"></i>
+                    <span>Try Computer</span>
+                </div>
+            </header>
+            <div class="card-body">
+                <div class="skeleton-row">
+                    <div class="skeleton-pill"></div>
+                    <div class="skeleton-pill"></div>
+                    <div class="skeleton-pill"></div>
+                    <div class="skeleton-pill"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        const searchInput = document.getElementById('search-input');
+        const searchSubmit = document.getElementById('search-submit');
+        const resultsCard = document.getElementById('results-card');
+        const resultsContent = document.getElementById('results-content');
+        const secondaryCard = document.getElementById('secondary-card');
+        const fileInput = document.getElementById('file-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileStatus = document.getElementById('file-status');
+        const fileNameSpan = document.getElementById('file-name');
+        const removeFileBtn = document.getElementById('remove-file');
+
+        // File upload logic
+        uploadBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    fileStatus.style.display = 'flex';
+                    fileNameSpan.textContent = data.filename;
+                    lucide.createIcons();
+                } else {
+                    alert(data.error || 'Upload failed');
+                }
+            } catch (err) {
+                alert('Connection error during upload');
+            }
+        });
+
+        removeFileBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            fileStatus.style.display = 'none';
+            // In a real app, you'd call a backend route to clear the session/global context
+        });
+
+        async function handleSearch() {
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            // Show loading state
+            resultsCard.style.display = 'block';
+            resultsContent.innerHTML = '<p class="loading-text">Generating response...</p>';
+            secondaryCard.style.display = 'none';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+
+                const data = await response.json();
+                if (data.response) {
+                    resultsContent.innerHTML = marked.parse(data.response);
+                } else if (data.error) {
+                    resultsContent.innerHTML = `<p class="error-text">Error: ${data.error}</p>`;
+                }
+            } catch (err) {
+                resultsContent.innerHTML = `<p class="error-text">Failed to connect to server.</p>`;
+            }
+        }
+
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch();
+        });
+
+        searchSubmit.addEventListener('click', handleSearch);
+    </script>
+</body>
+</html>
